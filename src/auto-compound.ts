@@ -68,10 +68,9 @@ async function claimBatch(stakersList: string[]) {
 
 async function main() {
     dotenv.config();
-    // await setSingleWeb3()
+    await setSingleWeb3()
     // const stakers = await getDelegatorsList();
-    // const {numberOfWallets, totalCompounded} = await claimBatch(["0x216FF847E6e1cf55618FAf443874450f734885e0"])
-    // CalcAndSendMetrics(numberOfWallets, totalCompounded)
-    console.log("TEST")
+    const {numberOfWallets, totalCompounded} = await claimBatch(["0x216FF847E6e1cf55618FAf443874450f734885e0"])
+    CalcAndSendMetrics(numberOfWallets, totalCompounded)
 }
 main().then(() => console.log("Done!")).catch(console.error)
