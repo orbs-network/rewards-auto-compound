@@ -54,7 +54,7 @@ async function claimBatch(stakersList: string[]) {
         try {
             const rewardBalance = await stakingRewardContract.methods.getDelegatorStakingRewardsData(staker).call();
             let balance = bigToNumber(new BigNumber(rewardBalance.balance));
-            // const receipt = await stakingRewardContract.methods.claimStakingRewards(staker).send({ from: constants.initiatorAddress, gas, gasPrice});
+            const receipt = await stakingRewardContract.methods.claimStakingRewards(staker).send({ from: process.env.ADDRESS, gas, gasPrice});
             numberOfWallets += 1;
             totalCompounded += balance;
             // console.log(receipt.transactionHash);
@@ -69,8 +69,8 @@ async function claimBatch(stakersList: string[]) {
 async function main() {
     dotenv.config();
     await setSingleWeb3()
-    // const stakers = await getDelegatorsList();
-    const {numberOfWallets, totalCompounded} = await claimBatch(["0x216FF847E6e1cf55618FAf443874450f734885e0"])
+    const stakers = await getDelegatorsList();
+    const {numberOfWallets, totalCompounded} = await claimBatch(stakers)
     CalcAndSendMetrics(numberOfWallets, totalCompounded)
 }
 main().then(() => console.log("Done!")).catch(console.error)
