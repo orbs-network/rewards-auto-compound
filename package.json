@@ -11,7 +11,8 @@
   },
   "scripts": {
     "build": "ncc build ./src/auto-compound.ts",
-    "prestart": "npm run build",
+    "predev": "npm run build",
+    "dev": "node ./dist/index",
     "start": "node ./dist/index"
   }
 }
