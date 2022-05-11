@@ -2,7 +2,7 @@
   "name": "rewards-auto-compound",
   "version": "1.0.0",
   "dependencies": {
-    "@orbs-network/pos-analytics-lib": "^0.8.7",
+    "@orbs-network/pos-analytics-lib": "^0.8.8",
     "@types/lodash": "^4.14.182",
     "@vercel/ncc": "^0.33.4",
     "dotenv": "^16.0.0",

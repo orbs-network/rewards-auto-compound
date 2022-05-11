@@ -27,6 +27,7 @@ async function CalcAndSendMetrics(numberOfWallets, totalCompounded) {
 }
 
 async function getDelegatorsList() {
+    console.log("Getting a list of stakers...")
     let stakers: string[] = [];
     const allGuardians = await getGuardians(constants.nodeEndpoints)
     const g_infos = await Promise.all(_.map(allGuardians, (g) => getGuardian(g.address, getWeb3())))
