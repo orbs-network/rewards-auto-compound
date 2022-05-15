@@ -59,6 +59,7 @@ async function claimBatch(stakersList: string[]) {
             numberOfWallets += 1;
             totalCompounded += balance;
             // console.log(receipt.transactionHash);
+            console.log(staker;
         } catch (e) {
             console.error(`Error while claiming for ${staker}: ${e}`);
         }
