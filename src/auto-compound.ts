@@ -55,7 +55,7 @@ async function claimBatch(stakersList: string[]) {
         try {
             const rewardBalance = await stakingRewardContract.methods.getDelegatorStakingRewardsData(staker).call();
             let balance = bigToNumber(new BigNumber(rewardBalance.balance));
-            const receipt = await stakingRewardContract.methods.claimStakingRewards(staker).send({ from: process.env.ADDRESS, gas, gasPrice});
+            const receipt = await stakingRewardContract.methods.claimStakingRewards(staker).send({from: process.env.ADDRESS, gas, gasPrice, maxPriorityFeePerGas: constants.maxPriorityFeePerGas, maxFeePerGas: constants.maxFeePerGas});
             numberOfWallets += 1;
             totalCompounded += balance;
             // console.log(receipt.transactionHash);
