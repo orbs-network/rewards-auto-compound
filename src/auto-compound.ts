@@ -49,13 +49,12 @@ async function claimBatch(stakersList: string[]) {
     const account = web3.eth.accounts.privateKeyToAccount(process.env.PK);
     web3.eth.accounts.wallet.add(account);
     const stakingRewardContract = new web3.eth.Contract(stakingRewardsAbi, constants.stakingRewardContractAddress);
-    const gasPrice = await web3.eth.getGasPrice();
     const gas = constants.gasLimit;
     for (const staker of stakersList) {
         try {
             const rewardBalance = await stakingRewardContract.methods.getDelegatorStakingRewardsData(staker).call();
             let balance = bigToNumber(new BigNumber(rewardBalance.balance));
-            const receipt = await stakingRewardContract.methods.claimStakingRewards(staker).send({from: process.env.ADDRESS, gas, gasPrice, maxPriorityFeePerGas: constants.maxPriorityFeePerGas, maxFeePerGas: constants.maxFeePerGas});
+            const receipt = await stakingRewardContract.methods.claimStakingRewards(staker).send({from: process.env.ADDRESS, gas, maxPriorityFeePerGas: constants.maxPriorityFeePerGas, maxFeePerGas: constants.maxFeePerGas});
             numberOfWallets += 1;
             totalCompounded += balance;
             // console.log(receipt.transactionHash);
