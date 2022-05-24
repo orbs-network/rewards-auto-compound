@@ -2,7 +2,6 @@ import {getGuardian, getGuardians} from "@orbs-network/pos-analytics-lib";
 import {getWeb3, setSingleWeb3} from './web3Singleton'
 import {stakingRewardsAbi} from './abi'
 import {constants} from "./constants";
-import _ from 'lodash';
 import * as process from "process";
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
@@ -30,13 +29,13 @@ async function getDelegatorsList() {
     console.log("Getting a list of stakers...")
     let stakers: string[] = [];
     const allGuardians = await getGuardians(constants.nodeEndpoints)
-    const g_infos = await Promise.all(_.map(allGuardians, (g) => getGuardian(g.address, getWeb3())))
-    _.forEach(g_infos, (g) => {
-        stakers.push(g.address);
-        _.forEach(g.delegators, (d) => {
+    for (const guardian of allGuardians) {
+        const g_info = await getGuardian(guardian.address, getWeb3());
+        stakers.push(g_info.address);
+        for (const d of g_info.delegators) {
             if (d.stake > constants.compoundRewardsThreshold) stakers.push(d.address);
-        })
-    })
+        }
+    }
     console.log(`Found ${stakers.length} stakers`)
     return stakers;
 }
@@ -72,6 +71,6 @@ async function main() {
     await setSingleWeb3()
     const stakers = await getDelegatorsList();
     const {numberOfWallets, totalCompounded} = await claimBatch(stakers)
-    CalcAndSendMetrics(numberOfWallets, totalCompounded)
+    await CalcAndSendMetrics(numberOfWallets, totalCompounded)
 }
 main().then(() => console.log("Done!")).catch(console.error)

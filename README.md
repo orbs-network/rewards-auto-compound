@@ -8,5 +8,6 @@ It also gathers and writes metrics.
 * Add ENV variables or create a `.env` file with the following entries: 
   * `ADDRESS` : the address used to initiate the Claim method 
   * `PK` : The private key for this address
+  * `PROVIDER_ENDPOINT` : RPC node url (e.g. Infura endpoint)
 * While making changes during development, run `npm run dev` to re-build and execute the code.
 * In production, after the code has been built, use `npm run start`.
