@@ -30,7 +30,7 @@ async function getDelegatorsList() {
     let stakers: string[] = [];
     const allGuardians = await getGuardians(constants.nodeEndpoints)
     for (const guardian of allGuardians) {
-        console.log(`Working on guardian ${guardian}`)
+        console.log(`Working on guardian ${guardian.address}`)
         const g_info = await getGuardian(guardian.address, getWeb3());
         stakers.push(g_info.address);
         for (const d of g_info.delegators) {
