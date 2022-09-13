@@ -45,12 +45,15 @@ async function claimBatch(stakersList: string[]) {
     console.log('Claiming...');
     let numberOfWallets = 0;
     let totalCompounded = 0;
+    let retry = 0;
     const web3 = getWeb3();
     const account = web3.eth.accounts.privateKeyToAccount(process.env.PK);
     web3.eth.accounts.wallet.add(account);
     const stakingRewardContract = new web3.eth.Contract(stakingRewardsAbi, constants.stakingRewardContractAddress);
     const gas = constants.gasLimit;
-    for (const staker of stakersList) {
+    const stakersListLen = stakersList.length;
+    while (stakersList.length) {
+        const staker = stakersList.shift();
         try {
             const rewardBalance = await stakingRewardContract.methods.getDelegatorStakingRewardsData(staker).call();
             let balance = bigToNumber(new BigNumber(rewardBalance.balance));
@@ -60,10 +63,16 @@ async function claimBatch(stakersList: string[]) {
             // console.log(receipt.transactionHash);
             console.log(staker);
         } catch (e) {
-            console.error(`Error while claiming for ${staker}: ${e}`);
+            if (retry < 3) {
+                console.error(`Retrying ${staker}: ${e}`);
+                await new Promise(resolve => setTimeout(resolve, 1250));
+                stakersList.push(staker)
+                retry++;
+            }
+            else console.error(`Error while claiming for ${staker}: ${e}`);
         }
     }
-    console.log(`Successfully claimed for ${numberOfWallets}/${stakersList.length} accounts`)
+    console.log(`Successfully claimed for ${numberOfWallets}/${stakersListLen} accounts`)
     return {numberOfWallets, totalCompounded};
 }
 
