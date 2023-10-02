@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import {bigToNumber} from "@orbs-network/pos-analytics-lib/dist/helpers";
 import BigNumber from 'bignumber.js';
-
+const EthereumMulticall = require('@orbs-network/ethereum-multicall');
 
 async function CalcAndSendMetrics(numberOfWallets, totalCompounded) {
     const web3 = getWeb3();
@@ -45,32 +45,46 @@ async function claimBatch(stakersList: string[]) {
     console.log('Claiming...');
     let numberOfWallets = 0;
     let totalCompounded = 0;
-    let retry = 0;
     const web3 = getWeb3();
     const account = web3.eth.accounts.privateKeyToAccount(process.env.PK);
     web3.eth.accounts.wallet.add(account);
+    const multicall = new EthereumMulticall.Multicall({web3Instance: web3});
     const stakingRewardContract = new web3.eth.Contract(stakingRewardsAbi, constants.stakingRewardContractAddress);
-    const gas = constants.gasLimit;
     const stakersListLen = stakersList.length;
-    while (stakersList.length) {
-        const staker = stakersList.shift();
-        try {
+    let calls;
+
+    const chunksNum = Math.ceil((constants.baseGas+constants.additionalWallet*stakersListLen) / (constants.blockGasLimit*constants.blockUtilization));
+    const chunkSize = Math.floor(stakersListLen/chunksNum)
+    console.log(`Running in ${chunksNum} chunks of ${chunkSize}`);
+    for (let i = 0; i < stakersList.length; i += chunkSize) {
+        calls = [];
+        const chunk = stakersList.slice(i, i + chunkSize);
+        while (chunk.length) {
+            const staker = chunk.shift();
+            console.log(staker);
             const rewardBalance = await stakingRewardContract.methods.getDelegatorStakingRewardsData(staker).call();
             let balance = bigToNumber(new BigNumber(rewardBalance.balance));
-            const receipt = await stakingRewardContract.methods.claimStakingRewards(staker).send({from: process.env.ADDRESS, gas, maxPriorityFeePerGas: constants.maxPriorityFeePerGas, maxFeePerGas: constants.maxFeePerGas});
             numberOfWallets += 1;
             totalCompounded += balance;
-            // console.log(receipt.transactionHash);
-            console.log(staker);
-        } catch (e) {
-            if (retry < 3) {
-                console.error(`Retrying ${staker}: ${e}`);
-                await new Promise(resolve => setTimeout(resolve, 1250));
-                stakersList.push(staker)
-                retry++;
-            }
-            else console.error(`Error while claiming for ${staker}: ${e}`);
+
+            calls.push({
+                reference: 'autoCompound',
+                methodName: 'claimStakingRewards',
+                methodParameters: [staker]
+            })
         }
+        const contractCallContext = [{
+            reference: 'autoCompound',
+            contractAddress: constants.stakingRewardContractAddress,
+            abi: stakingRewardsAbi,
+            calls
+        }];
+        await multicall.send(contractCallContext, {
+                from: process.env.ADDRESS,
+                gas: constants.blockGasLimit * constants.blockUtilization,
+                maxPriorityFeePerGas: constants.maxPriorityFeePerGas,
+                maxFeePerGas: constants.maxFeePerGas
+            })
     }
     console.log(`Successfully claimed for ${numberOfWallets}/${stakersListLen} accounts`)
     return {numberOfWallets, totalCompounded};
