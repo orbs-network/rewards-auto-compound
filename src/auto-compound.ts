@@ -1,4 +1,4 @@
-import {getGuardian, getGuardians} from "@orbs-network/pos-analytics-lib";
+import {getDelegators, getGuardians} from "@orbs-network/pos-analytics-lib";
 import {getWeb3, setSingleWeb3} from './web3Singleton'
 import {stakingRewardsAbi} from './abi'
 import {constants} from "./constants";
@@ -31,9 +31,9 @@ async function getDelegatorsList() {
     const allGuardians = await getGuardians(constants.nodeEndpoints)
     for (const guardian of allGuardians) {
         console.log(`Working on guardian ${guardian.address}`)
-        const g_info = await getGuardian(guardian.address, getWeb3());
-        stakers.push(g_info.address);
-        for (const d of g_info.delegators) {
+        const g_info = await getDelegators(guardian.address, getWeb3());
+        stakers.push(guardian.address);
+        for (const d of g_info) {
             if (d.stake > constants.compoundRewardsThreshold) stakers.push(d.address);
         }
     }
@@ -80,11 +80,11 @@ async function claimBatch(stakersList: string[]) {
             calls
         }];
         await multicall.send(contractCallContext, {
-                from: process.env.ADDRESS,
-                gas: constants.blockGasLimit * constants.blockUtilization,
-                maxPriorityFeePerGas: constants.maxPriorityFeePerGas,
-                maxFeePerGas: constants.maxFeePerGas
-            })
+            from: process.env.ADDRESS,
+            gas: constants.blockGasLimit * constants.blockUtilization,
+            maxPriorityFeePerGas: constants.maxPriorityFeePerGas,
+            maxFeePerGas: constants.maxFeePerGas
+        })
     }
     console.log(`Successfully claimed for ${numberOfWallets}/${stakersListLen} accounts`)
     return {numberOfWallets, totalCompounded};
