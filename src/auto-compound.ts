@@ -1,28 +1,29 @@
-import {getDelegators, getGuardians} from "@orbs-network/pos-analytics-lib";
-import {getWeb3, setSingleWeb3} from './web3Singleton'
-import {stakingRewardsAbi} from './abi'
-import {constants} from "./constants";
+import { getDelegators, getGuardians } from "@orbs-network/pos-analytics-lib";
+import { getWeb3, setSingleWeb3 } from './web3Singleton'
+import { stakingRewardsAbi } from './abi'
+import { constants } from "./constants";
 import * as process from "process";
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
-import {bigToNumber} from "@orbs-network/pos-analytics-lib/dist/helpers";
+import { bigToNumber } from "@orbs-network/pos-analytics-lib/dist/helpers";
 import BigNumber from 'bignumber.js';
 const EthereumMulticall = require('@orbs-network/ethereum-multicall');
 
 async function CalcAndSendMetrics(numberOfWallets, totalCompounded) {
     const web3 = getWeb3();
     // get staking balance
-    const minABI = [{"constant":true, "inputs":[{"name":"_owner","type":"address"}], "name":"balanceOf", "outputs":[{"name":"balance","type":"uint256"}], "type":"function"}, {"constant":true, "inputs":[], "name":"decimals", "outputs":[{"name":"","type":"uint8"}], "type":"function"}];
+    const minABI = [{ "constant": true, "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" }, { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }];
     const tokenContract = new web3.eth.Contract(minABI, constants.orbsErc20)
     let stakingBalance = await tokenContract.methods.balanceOf(constants.stakingContract).call();
     stakingBalance = bigToNumber(new BigNumber(stakingBalance));
 
-    const json = {"numberOfWallets": numberOfWallets, "totalCompounded": totalCompounded, "stakingBalance": stakingBalance}
+    const json = { "numberOfWallets": numberOfWallets, "totalCompounded": totalCompounded, "stakingBalance": stakingBalance }
     const response = await fetch(constants.esEndpoint, {
         method: 'post',
         body: JSON.stringify(json),
-        headers: {'Content-Type': 'application/json'}
+        headers: { 'Content-Type': 'application/json' }
     });
+    console.log(response)
 }
 
 async function getDelegatorsList() {
@@ -48,13 +49,15 @@ async function claimBatch(stakersList: string[]) {
     const web3 = getWeb3();
     const account = web3.eth.accounts.privateKeyToAccount(process.env.PK);
     web3.eth.accounts.wallet.add(account);
-    const multicall = new EthereumMulticall.Multicall({web3Instance: web3});
+    const multicall = new EthereumMulticall.Multicall({ web3Instance: web3 });
     const stakingRewardContract = new web3.eth.Contract(stakingRewardsAbi, constants.stakingRewardContractAddress);
     const stakersListLen = stakersList.length;
     let calls;
 
-    const chunksNum = Math.ceil((constants.baseGas+constants.additionalWallet*stakersListLen) / (constants.blockGasLimit*constants.blockUtilization));
-    const chunkSize = Math.floor(stakersListLen/chunksNum)
+    const chunksNum = Math.ceil((constants.baseGas + constants.additionalWallet * stakersListLen) / (constants.blockGasLimit * constants.blockUtilization));
+    // PATCH
+    let chunkSize = Math.floor(stakersListLen / chunksNum)
+    chunkSize = Math.floor(chunkSize / 2)
     console.log(`Running in ${chunksNum} chunks of ${chunkSize}`);
     for (let i = 0; i < stakersList.length; i += chunkSize) {
         calls = [];
@@ -79,6 +82,7 @@ async function claimBatch(stakersList: string[]) {
             abi: stakingRewardsAbi,
             calls
         }];
+        console.log('multicall')
         await multicall.send(contractCallContext, {
             from: process.env.ADDRESS,
             gas: constants.blockGasLimit * constants.blockUtilization,
@@ -87,14 +91,15 @@ async function claimBatch(stakersList: string[]) {
         })
     }
     console.log(`Successfully claimed for ${numberOfWallets}/${stakersListLen} accounts`)
-    return {numberOfWallets, totalCompounded};
+    return { numberOfWallets, totalCompounded };
 }
 
 async function main() {
     dotenv.config();
+    console.log(process.env)
     await setSingleWeb3()
     const stakers = await getDelegatorsList();
-    const {numberOfWallets, totalCompounded} = await claimBatch(stakers)
+    const { numberOfWallets, totalCompounded } = await claimBatch(stakers)
     await CalcAndSendMetrics(numberOfWallets, totalCompounded)
 }
 main().then(() => console.log("Done!")).catch(console.error)
