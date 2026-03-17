@@ -8,6 +8,7 @@ import fetch from 'node-fetch';
 import {bigToNumber} from "@orbs-network/pos-analytics-lib/dist/helpers";
 import BigNumber from 'bignumber.js';
 const EthereumMulticall = require('@orbs-network/ethereum-multicall');
+const MULTICALL3_POLYGON_ADDRESS = '0xcA11bde05977b3631167028862bE2a173976CA11';
 
 async function CalcAndSendMetrics(numberOfWallets, totalCompounded) {
     const web3 = getWeb3();
@@ -41,20 +42,30 @@ async function getDelegatorsList() {
     return stakers;
 }
 
-async function claimBatch(stakersList: string[]) {
-    console.log('Claiming...');
+function isSimulationMode() {
+    return process.argv.includes('--simulate') || process.env.SIMULATE === 'true';
+}
+
+function getSimulationResults(simulationResponse) {
+    return simulationResponse.returnData || simulationResponse[2] || [];
+}
+
+async function claimBatch(stakersList: string[], simulate: boolean) {
+    console.log(simulate ? 'Simulating...' : 'Claiming...');
     let numberOfWallets = 0;
     let totalCompounded = 0;
     const web3 = getWeb3();
     const account = web3.eth.accounts.privateKeyToAccount(process.env.PK);
     web3.eth.accounts.wallet.add(account);
+    const senderAddress = account.address;
     const multicall = new EthereumMulticall.Multicall({web3Instance: web3});
+    const multicallContract = new web3.eth.Contract(EthereumMulticall.Multicall.ABI, MULTICALL3_POLYGON_ADDRESS);
     const stakingRewardContract = new web3.eth.Contract(stakingRewardsAbi, constants.stakingRewardContractAddress);
     const stakersListLen = stakersList.length;
     let calls;
 
     const chunksNum = Math.ceil((constants.baseGas+constants.additionalWallet*stakersListLen) / (constants.blockGasLimit*constants.blockUtilization));
-    const chunkSize = Math.floor(stakersListLen/chunksNum)
+    const chunkSize = Math.max(1, Math.floor(stakersListLen/chunksNum))
     console.log(`Running in ${chunksNum} chunks of ${chunkSize}`);
     for (let i = 0; i < stakersList.length; i += chunkSize) {
         calls = [];
@@ -68,7 +79,7 @@ async function claimBatch(stakersList: string[]) {
             totalCompounded += balance;
 
             calls.push({
-                reference: 'autoCompound',
+                reference: `claim-${staker}`,
                 methodName: 'claimStakingRewards',
                 methodParameters: [staker]
             })
@@ -79,22 +90,58 @@ async function claimBatch(stakersList: string[]) {
             abi: stakingRewardsAbi,
             calls
         }];
+        if (simulate) {
+            const encodedCalls = calls.map((call) => ({
+                target: constants.stakingRewardContractAddress,
+                callData: stakingRewardContract.methods.claimStakingRewards(call.methodParameters[0]).encodeABI()
+            }));
+            const simulation = await multicallContract.methods
+                .tryBlockAndAggregate(false, encodedCalls)
+                .call({from: senderAddress});
+            const simulationResults = getSimulationResults(simulation);
+            const failedCalls = calls
+                .map((call, index) => ({call, result: simulationResults[index]}))
+                .filter((entry) => !entry.result || !entry.result.success)
+                .map((entry) => entry.call.methodParameters[0]);
+
+            console.log(`Chunk ${Math.floor(i / chunkSize) + 1}: eth_call ok=${calls.length - failedCalls.length}/${calls.length}`);
+            if (failedCalls.length > 0) {
+                console.log(`Failed stakers: ${failedCalls.join(', ')}`);
+            }
+
+            try {
+                const estimatedGas = await multicallContract.methods
+                    .aggregate(encodedCalls)
+                    .estimateGas({from: senderAddress});
+                console.log(`Chunk ${Math.floor(i / chunkSize) + 1}: estimated gas ${estimatedGas}`);
+            } catch (e) {
+                console.log(`Chunk ${Math.floor(i / chunkSize) + 1}: estimateGas failed: ${e.message}`);
+            }
+            continue;
+        }
+
         await multicall.send(contractCallContext, {
-            from: process.env.ADDRESS,
+            from: senderAddress,
             gas: constants.blockGasLimit * constants.blockUtilization,
             maxPriorityFeePerGas: constants.maxPriorityFeePerGas,
             maxFeePerGas: constants.maxFeePerGas
         })
     }
-    console.log(`Successfully claimed for ${numberOfWallets}/${stakersListLen} accounts`)
+    console.log(`${simulate ? 'Simulated' : 'Successfully claimed for'} ${numberOfWallets}/${stakersListLen} accounts`)
     return {numberOfWallets, totalCompounded};
 }
 
 async function main() {
     dotenv.config();
     await setSingleWeb3()
+    const simulate = isSimulationMode();
+    if (simulate) console.log("Simulation mode enabled")
     const stakers = await getDelegatorsList();
-    const {numberOfWallets, totalCompounded} = await claimBatch(stakers)
+    const {numberOfWallets, totalCompounded} = await claimBatch(stakers, simulate)
+    if (simulate) {
+        console.log(`Simulation mode enabled, skipped metrics post. Wallets=${numberOfWallets}, totalCompounded=${totalCompounded}`);
+        return;
+    }
     await CalcAndSendMetrics(numberOfWallets, totalCompounded)
 }
 main().then(() => console.log("Done!")).catch(console.error)
